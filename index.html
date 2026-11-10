@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enclave Arcade</title>
+  <style>
+    :root {
+      --bg-tertiary: #1e1f22;
+      --bg-secondary: #2b2d31;
+      --bg-primary: #313338;
+      --bg-modifier: #383a40;
+      --text-normal: #f2f3f5;
+      --text-muted: #949ba4;
+      --brand: #5865f2;
+      --brand-hover: #4752c4;
+      --green: #23a55a;
+      --red: #f23f43;
+      --yellow: #f0b232;
+      --border: #3f4147;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+    body {
+      font-family: 'gg sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-normal);
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+
+    .app-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .channel-pill {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    .mode-tabs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mode-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .mode-btn.active {
+      background: var(--bg-modifier);
+      color: var(--text-normal);
+      border-color: var(--border);
+    }
+
+    .discord-profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-tertiary);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .discord-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--brand);
+    }
+
+    .discord-nick {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Main Layout */
+    main {
+      display: grid;
+      grid-template-columns: 240px 1fr 290px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Left Column: Voice Roster & Rules */
+    .left-panel {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .player-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: var(--bg-primary);
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .player-row-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .player-row img {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+    }
+
+    .team-tag {
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-weight: 700;
+    }
+    .team-a { background: rgba(88, 101, 242, 0.25); color: #99a2ff; }
+    .team-b { background: rgba(242, 63, 67, 0.25); color: #ff8e91; }
+
+    .settings-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .setting-field {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .setting-field input, .setting-field select {
+      width: 74px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-normal);
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: var(--brand-hover); }
+
+    .btn-secondary {
+      background: var(--bg-modifier);
+      color: var(--text-normal);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Center Stage */
+    .stage {
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 16px;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .hud-bar {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .word-mask {
+      font-family: monospace;
+      font-size: 22px;
+      letter-spacing: 6px;
+      font-weight: 700;
+    }
+
+    .hangman-lives {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--yellow);
+      background: var(--bg-tertiary);
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
+
+    .canvas-container {
+      flex: 1;
+      background: #ffffff;
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Gartic Prompt & Album Overlay */
+    .overlay-panel {
+      position: absolute;
+      inset: 0;
+      background: rgba(30, 31, 34, 0.96);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      gap: 14px;
+    }
+
+    .gartic-album {
+      width: 100%;
+      max-width: 640px;
+      max-height: 85%;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .gartic-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .gartic-card img {
+      width: 100%;
+      max-height: 220px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+
+    /* Bottom Drawing Toolbar */
+    .toolbar {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .swatches {
+      display: flex;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .swatch.active { border-color: #fff; }
+
+    .tool-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Right Column: Guesses & Chat */
+    .right-panel {
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .chat-log {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .chat-msg {
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .chat-msg strong { color: var(--text-normal); margin-right: 4px; }
+    .chat-msg.correct {
+      color: var(--green);
+      font-weight: 600;
+      background: rgba(35, 165, 90, 0.12);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .chat-msg.system { color: var(--text-muted); font-style: italic; }
+
+    .chat-input-bar {
+      padding: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .chat-input-bar input {
+      width: 100%;
+      background: var(--bg-modifier);
+      border: 1px solid var(--border);
+      color: var(--text-normal);
+      padding: 9px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header>
+    <div class="app-title">
+      <span>ENCLAVE ARCADE</span>
+      <span class="channel-pill" id="instanceLabel">Connecting to Discord...</span>
+    </div>
+
+    <div class="mode-tabs">
+      <button class="mode-btn active" data-mode="skribbl">Skribbl Classic</button>
+      <button class="mode-btn" data-mode="gartic">Gartic Chain</button>
+      <button class="mode-btn" data-mode="hangman">Team Hangman</button>
+      <button class="mode-btn" data-mode="snake">Live Snake.io</button>
+    </div>
+
+    <div class="discord-profile">
+      <img id="myAvatar" class="discord-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar" />
+      <span id="myNickname" class="discord-nick">Loading...</span>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main>
+    <!-- LEFT: VOICE CHANNEL PLAYERS & EDITABLE SETTINGS -->
+    <aside class="left-panel">
+      <div>
+        <div class="section-label">Players in Lobby</div>
+        <div class="player-list" id="playerList"></div>
+      </div>
+
+      <div class="settings-box">
+        <div class="section-label">Room Settings</div>
+        <div class="setting-field">
+          <label>Draw Time (s)</label>
+          <input type="number" id="cfgDrawTime" value="80" min="20" max="180" />
+        </div>
+        <div class="setting-field">
+          <label>Rounds</label>
+          <input type="number" id="cfgRounds" value="3" min="1" max="10" />
+        </div>
+        <div class="setting-field">
+          <label>Hangman Chances</label>
+          <input type="number" id="cfgHangmanGuesses" value="10" min="1" max="25" />
+        </div>
+        <div class="setting-field">
+          <label>Word Difficulty</label>
+          <select id="cfgDifficulty">
+            <option value="ALL">All Words</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="btnStartMatch">Start / Sync Rules</button>
+      </div>
+    </aside>
+
+    <!-- CENTER: DRAWING & SNAKE STAGE -->
+    <section class="stage">
+      <div class="hud-bar">
+        <div>
+          <span style="font-size:12px;color:var(--text-muted);" id="roundStatus">Round 1 / 3</span>
+          <div class="word-mask" id="wordMask">_ _ _ _ _ _ _</div>
+        </div>
+
+        <div class="hangman-lives" id="hangmanCounter">
+          <span>Team Chances Left:</span>
+          <span id="guessesRemaining">10 / 10</span>
+        </div>
+
+        <div style="font-weight:700;font-size:16px;" id="timerDisplay">80s</div>
+      </div>
+
+      <div class="canvas-container">
+        <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+        <!-- Gartic Sentence Input / Album Download Overlay -->
+        <div class="overlay-panel" id="garticOverlay">
+          <h3 id="garticTitle">Write a prompt or interpretation</h3>
+          <div style="display:flex;gap:8px;width:100%;max-width:460px;" id="garticInputRow">
+            <input type="text" id="garticTextInput" placeholder="e.g., A pirate fishing on the moon..." style="flex:1;padding:8px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg-modifier);color:#fff;" />
+            <button class="btn-primary" id="btnSubmitGartic">Submit</button>
+          </div>
+          <div class="gartic-album" id="garticAlbum"></div>
+        </div>
+      </div>
+
+      <div class="toolbar" id="drawingToolbar">
+        <div class="swatches" id="colorSwatches"></div>
+        <div class="tool-actions">
+          <label style="font-size:12px;color:var(--text-muted);">Size</label>
+          <input type="range" id="brushSize" min="2" max="28" value="6" />
+          <button class="btn-secondary" id="btnEraser">Eraser</button>
+          <button class="btn-secondary" id="btnClear">Clear</button>
+          <button class="btn-secondary" id="btnDownloadImg">Save PNG</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: GUESSING & CHAT -->
+    <aside class="right-panel">
+      <div class="chat-log" id="chatLog"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="guessInput" placeholder="Type your guess or chat here..." autocomplete="off" />
+      </div>
+    </aside>
+  </main>
+
+  <script type="module">
+    import { DiscordSDK } from "https://esm.sh/@discord/embedded-app-sdk@1.8.0";
+
+    // ========================================================================
+    // 1. CONFIGURATION (Set your Discord Client ID & Cloudflare/Node URLs)
+    // ========================================================================
+    const DISCORD_CLIENT_ID = "YOUR_DISCORD_APPLICATION_CLIENT_ID";
+    const BACKEND_WS_URL = window.location.hostname.includes("discordsays.com")
+      ? `wss://${window.location.host}/.proxy/ws`
+      : "ws://localhost:8080";
+
+    // ========================================================================
+    // 2. STATE & DISCORD IDENTITY (Server Nickname + Guild/User Avatar)
+    // ========================================================================
+    const state = {
+      mode: "skribbl",
+      instanceId: "local-lobby",
+      me: {
+        discordId: "local-" + Math.floor(Math.random() * 9999),
+        nickname: "Server Member",
+        avatarUrl: "https://cdn.discordapp.com/embed/avatars/1.png",
+        team: "A"
+      },
+      players: [],
+      drawing: false,
+      color: "#000000",
+      size: 6,
+      hangmanLeft: 10,
+      hangmanMax: 10
+    };
+
+    async function initDiscordIdentity() {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get("frame_id")) {
+        // Browser testing fallback outside Discord client
+        document.getElementById("instanceLabel").textContent = "Browser Dev Mode";
+        renderMyProfile();
+        connectWebSocket();
+        return;
+      }
+
+      const discordSdk = new DiscordSDK(DISCORD_CLIENT_ID);
+      await discordSdk.ready();
+      state.instanceId = discordSdk.instanceId;
+      document.getElementById("instanceLabel").textContent = `Voice Instance #${state.instanceId.slice(0, 6)}`;
+
+      // Authorize & exchange token through your Node/Cloudflare /api/token route
+      const { code } = await discordSdk.commands.authorize({
+        client_id: DISCORD_CLIENT_ID,
+        response_type: "code",
+        state: "",
+        prompt: "none",
+        scope: ["identify", "guilds", "guilds.members.read"]
+      });
+
+      const tokenRes = await fetch("/.proxy/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, guildId: discordSdk.guildId })
+      });
+      const authData = await tokenRes.json();
+
+      await discordSdk.commands.authenticate({ access_token: authData.access_token });
+
+      // Prefer Server Nickname (member.nick), fallback to global_name, then username
+      state.me.discordId = authData.user.id;
+      state.me.nickname = authData.member?.nick || authData.user.global_name || authData.user.username;
+      state.me.avatarUrl = authData.avatarUrl;
+
+      renderMyProfile();
+      connectWebSocket();
+    }
+
+    function renderMyProfile() {
+      document.getElementById("myNickname").textContent = state.me.nickname;
+      document.getElementById("myAvatar").src = state.me.avatarUrl;
+    }
+
+    // ========================================================================
+    // 3. WEBSOCKET CONNECTION TO NODE.JS RUNTIME
+    // ========================================================================
+    let ws;
+    function connectWebSocket() {
+      try {
+        ws = new WebSocket(BACKEND_WS_URL);
+        ws.onopen = () => {
+          sendPacket("join", {
+            instanceId: state.instanceId,
+            player: state.me
+          });
+        };
+        ws.onmessage = (event) => handleServerPacket(JSON.parse(event.data));
+      } catch (e) {
+        appendChat("System", "Running in offline preview until Node.js server is connected.", "system");
+      }
+    }
+
+    function sendPacket(type, payload = {}) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type, ...payload }));
+      }
+    }
+
+    function handleServerPacket(msg) {
+      if (msg.type === "roster") {
+        state.players = msg.players;
+        renderRoster();
+      } else if (msg.type === "stroke") {
+        drawLine(msg.x0, msg.y0, msg.x1, msg.y1, msg.color, msg.size, false);
+      } else if (msg.type === "clearCanvas") {
+        clearBoard(false);
+      } else if (msg.type === "roundState") {
+        document.getElementById("wordMask").textContent = msg.maskedWord;
+        document.getElementById("roundStatus").textContent = `Round ${msg.round} / ${msg.maxRounds}`;
+        if (msg.hangmanLeft !== undefined) {
+          document.getElementById("guessesRemaining").textContent = `${msg.hangmanLeft} / ${msg.hangmanMax}`;
+        }
+      } else if (msg.type === "chat") {
+        appendChat(msg.nickname, msg.text, msg.style);
+      } else if (msg.type === "garticAlbum") {
+        renderGarticAlbum(msg.chain);
+      } else if (msg.type === "snakeTick") {
+        renderSnakeFrame(msg.snakes, msg.orbs);
+      }
+    }
+
+    // ========================================================================
+    // 4. CANVAS DRAWING & PNG DOWNLOAD (For Skribbl, Gartic, & Team Hangman)
+    // ========================================================================
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    clearBoard(false);
+
+    const palette = ["#000000", "#ffffff", "#f23f43", "#f0b232", "#23a55a", "#5865f2", "#9b59b6", "#e67e22", "#795548"];
+    const swatchContainer = document.getElementById("colorSwatches");
+    palette.forEach((hex, idx) => {
+      const el = document.createElement("div");
+      el.className = "swatch" + (idx === 0 ? " active" : "");
+      el.style.background = hex;
+      el.onclick = () => {
+        state.color = hex;
+        document.querySelectorAll(".swatch").forEach(s => s.classList.remove("active"));
+        el.classList.add("active");
+      };
+      swatchContainer.appendChild(el);
+    });
+
+    let lastPos = { x: 0, y: 0 };
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      if (state.mode === "snake") return;
+      state.drawing = true;
+      lastPos = getCanvasCoords(e);
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!state.drawing || state.mode === "snake") return;
+      const pos = getCanvasCoords(e);
+      drawLine(lastPos.x, lastPos.y, pos.x, pos.y, state.color, state.size, true);
+      lastPos = pos;
+    });
+
+    window.addEventListener("pointerup", () => { state.drawing = false; });
+
+    function drawLine(x0, y0, x1, y1, color, size, emit) {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      if (emit) {
+        sendPacket("stroke", { x0, y0, x1, y1, color, size });
+      }
+    }
+
+    function clearBoard(emit = true) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (emit) sendPacket("clearCanvas");
+    }
+
+    // Download Drawing as PNG
+    document.getElementById("btnDownloadImg").onclick = () => {
+      const link = document.createElement("a");
+      link.download = `enclave-arcade-${Date.now()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+
+    document.getElementById("btnClear").onclick = () => clearBoard(true);
+    document.getElementById("btnEraser").onclick = () => { state.color = "#ffffff"; };
+    document.getElementById("brushSize").oninput = (e) => { state.size = Number(e.target.value); };
+
+    // ========================================================================
+    // 5. GAME MODE SWITCHING (Skribbl, Gartic, Team Hangman, Snake.io)
+    // ========================================================================
+    document.querySelectorAll(".mode-btn").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.mode = btn.dataset.mode;
+
+        document.getElementById("hangmanCounter").style.display =
+          state.mode === "hangman" ? "flex" : "none";
+        document.getElementById("drawingToolbar").style.display =
+          state.mode === "snake" ? "none" : "flex";
+        document.getElementById("garticOverlay").style.display =
+          state.mode === "gartic" ? "flex" : "none";
+
+        sendPacket("switchMode", { mode: state.mode });
+      };
+    });
+
+    // Save / Sync Editable Settings (including Hangman guess limit)
+    document.getElementById("btnStartMatch").onclick = () => {
+      const settings = {
+        mode: state.mode,
+        drawTime: Number(document.getElementById("cfgDrawTime").value) || 80,
+        rounds: Number(document.getElementById("cfgRounds").value) || 3,
+        hangmanMaxGuesses: Number(document.getElementById("cfgHangmanGuesses").value) || 10,
+        difficulty: document.getElementById("cfgDifficulty").value
+      };
+      document.getElementById("guessesRemaining").textContent =
+        `${settings.hangmanMaxGuesses} / ${settings.hangmanMaxGuesses}`;
+      sendPacket("startGame", { settings });
+    };
+
+    // Gartic Album Renderer with per-drawing Download Button
+    function renderGarticAlbum(chain) {
+      const overlay = document.getElementById("garticOverlay");
+      const album = document.getElementById("garticAlbum");
+      overlay.style.display = "flex";
+      album.innerHTML = "";
+      chain.forEach((step, idx) => {
+        const card = document.createElement("div");
+        card.className = "gartic-card";
+        card.innerHTML = `<strong>${step.nickname}</strong>: ${step.prompt || "Drew an interpretation"}`;
+        if (step.imageDataUrl) {
+          const img = document.createElement("img");
+          img.src = step.imageDataUrl;
+          const dlBtn = document.createElement("button");
+          dlBtn.className = "btn-secondary";
+          dlBtn.style.marginTop = "8px";
+          dlBtn.textContent = "Download Image";
+          dlBtn.onclick = () => {
+            const a = document.createElement("a");
+            a.download = `gartic-${step.nickname}-${idx + 1}.png`;
+            a.href = step.imageDataUrl;
+            a.click();
+          };
+          card.appendChild(img);
+          card.appendChild(dlBtn);
+        }
+        album.appendChild(card);
+      });
+    }
+
+    // Snake.io Live Keyboard Input & Renderer
+    window.addEventListener("keydown", (e) => {
+      if (state.mode !== "snake") return;
+      const dirs = {
+        ArrowUp: [0, -1], KeyW: [0, -1],
+        ArrowDown: [0, 1], KeyS: [0, 1],
+        ArrowLeft: [-1, 0], KeyA: [-1, 0],
+        ArrowRight: [1, 0], KeyD: [1, 0]
+      };
+      if (dirs[e.code]) {
+        sendPacket("snakeDir", { dx: dirs[e.code][0], dy: dirs[e.code][1] });
+      }
+    });
+
+    function renderSnakeFrame(snakes, orbs) {
+      ctx.fillStyle = "#18191c";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      orbs.forEach(o => {
+        ctx.fillStyle = "#f0b232";
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      snakes.forEach(s => {
+        ctx.fillStyle = s.color || "#5865f2";
+        s.body.forEach((seg, i) => {
+          ctx.fillRect(seg.x - 7, seg.y - 7, 14, 14);
+          if (i === 0) {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "600 11px sans-serif";
+            ctx.fillText(s.nickname, seg.x - 16, seg.y - 12);
+            ctx.fillStyle = s.color || "#5865f2";
+          }
+        });
+      });
+    }
+
+    // ========================================================================
+    // 6. ROSTER & CHAT / GUESS SUBMISSION
+    // ========================================================================
+    function renderRoster() {
+      const container = document.getElementById("playerList");
+      container.innerHTML = "";
+      state.players.forEach(p => {
+        const row = document.createElement("div");
+        row.className = "player-row";
+        row.innerHTML = `
+          <div class="player-row-left">
+            <img src="${p.avatarUrl}" alt="" />
+            <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.nickname}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            ${state.mode === "hangman" ? `<span class="team-tag ${p.team === "A" ? "team-a" : "team-b"}">Team ${p.team}</span>` : ""}
+            <span style="color:var(--text-muted);font-weight:600;">${p.score || 0}</span>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function appendChat(nickname, text, style = "") {
+      const log = document.getElementById("chatLog");
+      const div = document.createElement("div");
+      div.className = `chat-msg ${style}`;
+      div.innerHTML = `<strong>${nickname}:</strong> ${text}`;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    document.getElementById("guessInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.value.trim()) {
+        sendPacket("guess", { text: e.target.value.trim() });
+        e.target.value = "";
+      }
+    });
+
+    initDiscordIdentity();
+  </script>
+</body>
+</html>
