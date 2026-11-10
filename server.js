@@ -1,23 +1,24 @@
 // ============================================================================
-// ENCLAVE ARCADE - ZERO-DEPENDENCY NODE.JS SERVER (NO NPM INSTALL NEEDED)
-// Uses ONLY built-in Node.js modules: http, crypto, buffer
+// ENCLAVE ARCADE - COMPLETE NODE.JS SERVER (Render / Zero-Dependency)
 // ============================================================================
 
 import http from 'node:http';
 import crypto from 'node:crypto';
 
-// Paste your values directly here (no dotenv package needed)
 const PORT = process.env.PORT || 8080;
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || 'YOUR_DISCORD_CLIENT_ID';
-const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || 'YOUR_DISCORD_CLIENT_SECRET';
-const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
+const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || '';
 
 let globalWordPool = [
   'anchor', 'compass', 'lantern', 'fortress', 'eclipse',
   'glacier', 'phantom', 'harbor', 'catapult', 'obsidian'
 ];
 
-// Sync words from Google Apps Script (Code.gs)
+// ============================================================================
+// 1. GOOGLE SHEETS INTEGRATION
+// ============================================================================
 async function syncDictionaryFromGoogleSheet(difficulty = 'ALL') {
   if (!GOOGLE_SCRIPT_URL.startsWith('http')) return;
   try {
@@ -58,10 +59,51 @@ async function pushScoresToGoogleSheet(players) {
 }
 
 // ============================================================================
-// 1. NATIVE HTTP SERVER (Handles CORS + Discord OAuth2 /api/token)
+// 2. DISCORD SLASH COMMAND REGISTRATION
+// ============================================================================
+async function registerDiscordSlashCommands() {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_CLIENT_ID) return;
+  try {
+    const url = `https://discord.com/api/v10/applications/${DISCORD_CLIENT_ID}/commands`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify([
+        {
+          name: 'arcade',
+          description: 'Launch Enclave Arcade (Skribbl, Gartic, Hangman & Snake)',
+          options: [
+            {
+              name: 'mode',
+              description: 'Choose initial game mode',
+              type: 3,
+              required: false,
+              choices: [
+                { name: 'Skribbl Classic', value: 'skribbl' },
+                { name: 'Gartic Chain', value: 'gartic' },
+                { name: 'Team Hangman', value: 'hangman' },
+                { name: 'Live Snake.io', value: 'snake' }
+              ]
+            }
+          ]
+        }
+      ])
+    });
+    if (res.ok) {
+      console.log('[Discord Bot] /arcade slash command registered successfully!');
+    }
+  } catch (err) {
+    console.error('[Discord Bot] Command registration error:', err.message);
+  }
+}
+
+// ============================================================================
+// 3. HTTP SERVER (OAuth2 Token Exchange & Discord Bot Interactions Endpoint)
 // ============================================================================
 const server = http.createServer(async (req, res) => {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -71,6 +113,58 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
+  // Handle Discord Slash Command Interactions Endpoint
+  if (req.method === 'POST' && req.url === '/interactions') {
+    let rawBody = '';
+    req.on('data', chunk => { rawBody += chunk; });
+    req.on('end', () => {
+      try {
+        const interaction = JSON.parse(rawBody || '{}');
+
+        // PING verification
+        if (interaction.type === 1) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ type: 1 }));
+        }
+
+        // /arcade command execution
+        if (interaction.type === 2 && interaction.data.name === 'arcade') {
+          const selectedMode = interaction.data.options?.[0]?.value || 'skribbl';
+          const frontendUrl = `https://your-github-username.github.io/enclave-arcade/?mode=${selectedMode}`;
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            type: 4,
+            data: {
+              content: `🎮 **Enclave Arcade** lobby created! Click below to join the game:`,
+              components: [
+                {
+                  type: 1,
+                  components: [
+                    {
+                      type: 2,
+                      style: 5,
+                      label: 'Launch Enclave Arcade',
+                      url: frontendUrl
+                    }
+                  ]
+                }
+              ]
+            }
+          }));
+        }
+
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unknown interaction' }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Handle OAuth2 Token & Server Nickname Exchange
   if (req.method === 'POST' && (req.url === '/api/token' || req.url === '/.proxy/api/token')) {
     let rawBody = '';
     req.on('data', chunk => { rawBody += chunk; });
@@ -121,11 +215,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Enclave Arcade Zero-Dependency Node Server Active');
+  res.end('Enclave Arcade Node Server Active');
 });
 
 // ============================================================================
-// 2. NATIVE WEBSOCKET ENGINE (Zero external libraries)
+// 4. WEBSOCKET ENGINE (Real-Time Drawing, Gartic, Hangman & Snake.io)
 // ============================================================================
 function sendWsFrame(socket, obj) {
   if (socket.destroyed || !socket.writable) return;
@@ -135,7 +229,7 @@ function sendWsFrame(socket, obj) {
 
   if (len < 126) {
     header = Buffer.alloc(2);
-    header[0] = 0x81; // FIN + Text frame
+    header[0] = 0x81;
     header[1] = len;
   } else if (len < 65536) {
     header = Buffer.alloc(4);
@@ -151,14 +245,13 @@ function sendWsFrame(socket, obj) {
   socket.write(Buffer.concat([header, payload]));
 }
 
-
 function decodeWsFrames(buffer) {
   const messages = [];
   let offset = 0;
 
   while (offset + 2 <= buffer.length) {
     const opcode = buffer[offset] & 0x0f;
-    if (opcode === 0x08) return { close: true, messages, remaining: Buffer.alloc(0) }; // Close frame
+    if (opcode === 0x08) return { close: true, messages, remaining: Buffer.alloc(0) };
 
     const isMasked = (buffer[offset + 1] & 0x80) !== 0;
     let payloadLen = buffer[offset + 1] & 0x7f;
@@ -197,49 +290,6 @@ function decodeWsFrames(buffer) {
   return { close: false, messages, remaining: buffer.subarray(offset) };
 }
 
-// Add this function to your Render server.js to register slash commands automatically on startup
-async function registerDiscordSlashCommands() {
-  const appId = process.env.DISCORD_CLIENT_ID;
-  const botToken = process.env.DISCORD_BOT_TOKEN; // Add your bot token to Render environment variables
-  
-  if (!botToken) return;
-
-  const url = `https://discord.com/api/v10/applications/${appId}/commands`;
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bot ${botToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify([
-      {
-        name: 'arcade',
-        description: 'Launch Enclave Arcade (Skribbl, Gartic, Hangman & Snake)',
-        options: [
-          {
-            name: 'mode',
-            description: 'Choose initial game mode',
-            type: 3, // STRING type
-            required: false,
-            choices: [
-              { name: 'Skribbl Classic', value: 'skribbl' },
-              { name: 'Gartic Chain', value: 'gartic' },
-              { name: 'Team Hangman', value: 'hangman' },
-              { name: 'Live Snake.io', value: 'snake' }
-            ]
-          }
-        ]
-      }
-    ])
-  });
-  
-  if (response.ok) {
-    console.log('[Discord Bot] Successfully registered /arcade slash command!');
-  }
-}
-// ============================================================================
-// 3. GAME ROOMS & LOGIC
-// ============================================================================
 const rooms = new Map();
 
 function getOrCreateRoom(instanceId) {
@@ -247,7 +297,7 @@ function getOrCreateRoom(instanceId) {
     rooms.set(instanceId, {
       instanceId,
       mode: 'skribbl',
-      players: new Map(), // socket -> player
+      players: new Map(),
       settings: { drawTime: 80, rounds: 3, hangmanMaxGuesses: 10, difficulty: 'ALL' },
       round: 1,
       currentWord: '',
@@ -496,7 +546,8 @@ server.on('upgrade', (req, socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Zero-Dependency Enclave Arcade Server listening on port ${PORT}`);
-  syncDictionaryFromGoogleSheet('ALL');
+server.listen(PORT, async () => {
+  console.log(`Enclave Arcade Server listening on port ${PORT}`);
+  await syncDictionaryFromGoogleSheet('ALL');
+  await registerDiscordSlashCommands();
 });
