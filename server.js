@@ -1,5 +1,5 @@
 // ============================================================================
-// ENCLAVE ARCADE - COMPLETE NODE.JS SERVER (Render / Zero-Dependency)
+// ENCLAVE ARCADE - NODE.JS SERVER WITH DISCORD GATEWAY BOT & GAME WEBSOCKETS
 // ============================================================================
 
 import http from 'node:http';
@@ -101,7 +101,100 @@ async function registerDiscordSlashCommands() {
 }
 
 // ============================================================================
-// 3. HTTP SERVER (OAuth2 Token Exchange & Discord Bot Interactions Endpoint)
+// 3. DISCORD GATEWAY BOT CLIENT (Handles /arcade commands via WebSocket)
+// ============================================================================
+function startDiscordGatewayBot() {
+  if (!DISCORD_BOT_TOKEN) return;
+
+  const gatewayUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
+  let heartbeatInterval = null;
+  let sequence = null;
+
+  function connect() {
+    const wsClient = new WebSocket(gatewayUrl);
+
+    wsClient.onopen = () => {
+      console.log('[Discord Gateway] Connected to Discord Gateway');
+    };
+
+    wsClient.onmessage = async (event) => {
+      const payload = JSON.parse(event.data);
+      if (payload.s) sequence = payload.s;
+
+      // OP 10: Hello -> Start Heartbeat & Identify
+      if (payload.op === 10) {
+        const interval = payload.d.heartbeat_interval;
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+          if (wsClient.readyState === WebSocket.OPEN) {
+            wsClient.send(JSON.stringify({ op: 1, d: sequence }));
+          }
+        }, interval);
+
+        wsClient.send(JSON.stringify({
+          op: 2,
+          d: {
+            token: DISCORD_BOT_TOKEN,
+            intents: 0,
+            properties: { os: 'linux', browser: 'enclave-arcade', device: 'enclave-arcade' }
+          }
+        }));
+      }
+
+      // OP 0: Dispatch Interaction Create Event
+      if (payload.op === 0 && payload.t === 'INTERACTION_CREATE') {
+        const interaction = payload.d;
+        if (interaction.data && interaction.data.name === 'arcade') {
+          const selectedMode = interaction.data.options?.[0]?.value || 'skribbl';
+          const frontendUrl = `https://your-github-username.github.io/enclave-arcade/?mode=${selectedMode}`;
+
+          const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`;
+          await fetch(callbackUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              type: 4,
+              data: {
+                content: `🎮 **Enclave Arcade** lobby created! Click below to join the game:`,
+                components: [
+                  {
+                    type: 1,
+                    components: [
+                      {
+                        type: 2,
+                        style: 5,
+                        label: 'Launch Enclave Arcade',
+                        url: frontendUrl
+                      }
+                    ]
+                  }
+                ]
+              }
+            })
+          });
+        }
+      }
+    };
+
+    wsClient.onclose = () => {
+      console.log('[Discord Gateway] Disconnected. Reconnecting in 5s...');
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      setTimeout(connect, 5000);
+    };
+
+    wsClient.onerror = (err) => {
+      console.error('[Discord Gateway error]:', err.message);
+    };
+  }
+
+  connect();
+}
+
+// ============================================================================
+// 4. HTTP SERVER (OAuth2 Token & Nickname Exchange)
 // ============================================================================
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,58 +206,6 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // Handle Discord Slash Command Interactions Endpoint
-  if (req.method === 'POST' && req.url === '/interactions') {
-    let rawBody = '';
-    req.on('data', chunk => { rawBody += chunk; });
-    req.on('end', () => {
-      try {
-        const interaction = JSON.parse(rawBody || '{}');
-
-        // PING verification
-        if (interaction.type === 1) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ type: 1 }));
-        }
-
-        // /arcade command execution
-        if (interaction.type === 2 && interaction.data.name === 'arcade') {
-          const selectedMode = interaction.data.options?.[0]?.value || 'skribbl';
-          const frontendUrl = `https://your-github-username.github.io/enclave-arcade/?mode=${selectedMode}`;
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({
-            type: 4,
-            data: {
-              content: `🎮 **Enclave Arcade** lobby created! Click below to join the game:`,
-              components: [
-                {
-                  type: 1,
-                  components: [
-                    {
-                      type: 2,
-                      style: 5,
-                      label: 'Launch Enclave Arcade',
-                      url: frontendUrl
-                    }
-                  ]
-                }
-              ]
-            }
-          }));
-        }
-
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Unknown interaction' }));
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
-    return;
-  }
-
-  // Handle OAuth2 Token & Server Nickname Exchange
   if (req.method === 'POST' && (req.url === '/api/token' || req.url === '/.proxy/api/token')) {
     let rawBody = '';
     req.on('data', chunk => { rawBody += chunk; });
@@ -219,7 +260,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ============================================================================
-// 4. WEBSOCKET ENGINE (Real-Time Drawing, Gartic, Hangman & Snake.io)
+// 5. GAME ROOM WEBSOCKET ENGINE
 // ============================================================================
 function sendWsFrame(socket, obj) {
   if (socket.destroyed || !socket.writable) return;
@@ -550,4 +591,5 @@ server.listen(PORT, async () => {
   console.log(`Enclave Arcade Server listening on port ${PORT}`);
   await syncDictionaryFromGoogleSheet('ALL');
   await registerDiscordSlashCommands();
+  startDiscordGatewayBot();
 });
