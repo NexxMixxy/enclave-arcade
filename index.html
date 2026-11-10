@@ -112,7 +112,7 @@
       overflow: hidden;
     }
 
-    /* Left Column: Voice Roster & Rules */
+    /* Left Column: Lobby & Rules */
     .left-panel {
       background: var(--bg-secondary);
       border-right: 1px solid var(--border);
@@ -280,7 +280,7 @@
       cursor: crosshair;
     }
 
-    /* Gartic Prompt & Album Overlay */
+    /* Gartic Overlay */
     .overlay-panel {
       position: absolute;
       inset: 0;
@@ -350,7 +350,7 @@
       gap: 8px;
     }
 
-    /* Right Column: Guesses & Chat */
+    /* Right Column: Chat & Guesses */
     .right-panel {
       background: var(--bg-secondary);
       border-left: 1px solid var(--border);
@@ -406,7 +406,7 @@
   <header>
     <div class="app-title">
       <span>ENCLAVE ARCADE</span>
-      <span class="channel-pill" id="instanceLabel">Connecting to Discord...</span>
+      <span class="channel-pill" id="instanceLabel">Connected via Discord Bot</span>
     </div>
 
     <div class="mode-tabs">
@@ -418,16 +418,16 @@
 
     <div class="discord-profile">
       <img id="myAvatar" class="discord-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar" />
-      <span id="myNickname" class="discord-nick">Loading...</span>
+      <span id="myNickname" class="discord-nick">Arcade Player</span>
     </div>
   </header>
 
   <!-- MAIN WORKSPACE -->
   <main>
-    <!-- LEFT: VOICE CHANNEL PLAYERS & EDITABLE SETTINGS -->
+    <!-- LEFT: PLAYERS & RULES -->
     <aside class="left-panel">
       <div>
-        <div class="section-label">Players in Lobby</div>
+        <div class="section-label">Lobby Players</div>
         <div class="player-list" id="playerList"></div>
       </div>
 
@@ -458,7 +458,7 @@
       </div>
     </aside>
 
-    <!-- CENTER: DRAWING & SNAKE STAGE -->
+    <!-- CENTER: STAGE -->
     <section class="stage">
       <div class="hud-bar">
         <div>
@@ -467,7 +467,7 @@
         </div>
 
         <div class="hangman-lives" id="hangmanCounter">
-          <span>Team Chances Left:</span>
+          <span>Chances Left:</span>
           <span id="guessesRemaining">10 / 10</span>
         </div>
 
@@ -477,13 +477,8 @@
       <div class="canvas-container">
         <canvas id="gameCanvas" width="960" height="540"></canvas>
 
-        <!-- Gartic Sentence Input / Album Download Overlay -->
         <div class="overlay-panel" id="garticOverlay">
-          <h3 id="garticTitle">Write a prompt or interpretation</h3>
-          <div style="display:flex;gap:8px;width:100%;max-width:460px;" id="garticInputRow">
-            <input type="text" id="garticTextInput" placeholder="e.g., A pirate fishing on the moon..." style="flex:1;padding:8px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg-modifier);color:#fff;" />
-            <button class="btn-primary" id="btnSubmitGartic">Submit</button>
-          </div>
+          <h3 id="garticTitle">Gartic Chain Album</h3>
           <div class="gartic-album" id="garticAlbum"></div>
         </div>
       </div>
@@ -500,7 +495,7 @@
       </div>
     </section>
 
-    <!-- RIGHT: GUESSING & CHAT -->
+    <!-- RIGHT: CHAT -->
     <aside class="right-panel">
       <div class="chat-log" id="chatLog"></div>
       <div class="chat-input-bar">
@@ -509,100 +504,72 @@
     </aside>
   </main>
 
-  <script type="module">
-    import { DiscordSDK } from "https://esm.sh/@discord/embedded-app-sdk@1.8.0";
+  <script>
+    // ========================================================================
+    // ENCLAVE ARCADE FRONTEND CLIENT
+    // ========================================================================
+    const BACKEND_WS_URL = window.location.protocol === 'https:'
+      ? `wss://${window.location.host}`
+      : `ws://localhost:8080`;
 
-    // ========================================================================
-    // 1. CONFIGURATION (Set your Discord Client ID & Cloudflare/Node URLs)
-    // ========================================================================
-    const DISCORD_CLIENT_ID = "YOUR_DISCORD_APPLICATION_CLIENT_ID";
-    const BACKEND_WS_URL = window.location.hostname.includes("discordsays.com")
-      ? `wss://${window.location.host}/.proxy/ws`
-      : "ws://localhost:8080";
-
-    // ========================================================================
-    // 2. STATE & DISCORD IDENTITY (Server Nickname + Guild/User Avatar)
-    // ========================================================================
     const state = {
       mode: "skribbl",
-      instanceId: "local-lobby",
+      instanceId: "lobby-" + Math.floor(Math.random() * 9999),
       me: {
-        discordId: "local-" + Math.floor(Math.random() * 9999),
-        nickname: "Server Member",
-        avatarUrl: "https://cdn.discordapp.com/embed/avatars/1.png",
+        discordId: "user-" + Math.floor(Math.random() * 9999),
+        nickname: "Arcade Player",
+        avatarUrl: "https://cdn.discordapp.com/embed/avatars/0.png",
         team: "A"
       },
       players: [],
       drawing: false,
       color: "#000000",
       size: 6,
-      hangmanLeft: 10,
-      hangmanMax: 10
+      hangmanLeft: 10
     };
 
-    async function initDiscordIdentity() {
+    // 1. Read URL Mode Parameter from Discord Slash Command Button
+    function initApp() {
       const params = new URLSearchParams(window.location.search);
-      if (!params.get("frame_id")) {
-        // Browser testing fallback outside Discord client
-        document.getElementById("instanceLabel").textContent = "Browser Dev Mode";
-        renderMyProfile();
-        connectWebSocket();
-        return;
+      const urlMode = params.get("mode");
+      if (urlMode) {
+        const btn = document.querySelector(`.mode-btn[data-mode="${urlMode}"]`);
+        if (btn) btn.click();
       }
-
-      const discordSdk = new DiscordSDK(DISCORD_CLIENT_ID);
-      await discordSdk.ready();
-      state.instanceId = discordSdk.instanceId;
-      document.getElementById("instanceLabel").textContent = `Voice Instance #${state.instanceId.slice(0, 6)}`;
-
-      // Authorize & exchange token through your Node/Cloudflare /api/token route
-      const { code } = await discordSdk.commands.authorize({
-        client_id: DISCORD_CLIENT_ID,
-        response_type: "code",
-        state: "",
-        prompt: "none",
-        scope: ["identify", "guilds", "guilds.members.read"]
-      });
-
-      const tokenRes = await fetch("/.proxy/api/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, guildId: discordSdk.guildId })
-      });
-      const authData = await tokenRes.json();
-
-      await discordSdk.commands.authenticate({ access_token: authData.access_token });
-
-      // Prefer Server Nickname (member.nick), fallback to global_name, then username
-      state.me.discordId = authData.user.id;
-      state.me.nickname = authData.member?.nick || authData.user.global_name || authData.user.username;
-      state.me.avatarUrl = authData.avatarUrl;
-
-      renderMyProfile();
       connectWebSocket();
     }
 
-    function renderMyProfile() {
-      document.getElementById("myNickname").textContent = state.me.nickname;
-      document.getElementById("myAvatar").src = state.me.avatarUrl;
-    }
-
-    // ========================================================================
-    // 3. WEBSOCKET CONNECTION TO NODE.JS RUNTIME
-    // ========================================================================
+    // 2. WebSocket Connection
     let ws;
     function connectWebSocket() {
       try {
         ws = new WebSocket(BACKEND_WS_URL);
         ws.onopen = () => {
-          sendPacket("join", {
-            instanceId: state.instanceId,
-            player: state.me
-          });
+          ws.send(JSON.stringify({ type: 'join', instanceId: state.instanceId, player: state.me }));
         };
-        ws.onmessage = (event) => handleServerPacket(JSON.parse(event.data));
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'roster') {
+            state.players = msg.players;
+            renderRoster();
+          } else if (msg.type === 'stroke') {
+            drawLine(msg.x0, msg.y0, msg.x1, msg.y1, msg.color, msg.size, false);
+          } else if (msg.type === 'clearCanvas') {
+            clearBoard(false);
+          } else if (msg.type === 'roundState') {
+            document.getElementById("wordMask").textContent = msg.maskedWord;
+            document.getElementById("roundStatus").textContent = `Round ${msg.round} / ${msg.maxRounds}`;
+            if (msg.hangmanLeft !== undefined) {
+              document.getElementById("guessesRemaining").textContent = `${msg.hangmanLeft} / ${msg.hangmanMax}`;
+            }
+          } else if (msg.type === 'chat') {
+            appendChat(msg.nickname, msg.text, msg.style);
+          } else if (msg.type === 'snakeTick') {
+            renderSnakeFrame(msg.snakes, msg.orbs);
+          }
+        };
       } catch (e) {
-        appendChat("System", "Running in offline preview until Node.js server is connected.", "system");
+        appendChat("System", "Running in offline preview mode.", "system");
       }
     }
 
@@ -612,32 +579,7 @@
       }
     }
 
-    function handleServerPacket(msg) {
-      if (msg.type === "roster") {
-        state.players = msg.players;
-        renderRoster();
-      } else if (msg.type === "stroke") {
-        drawLine(msg.x0, msg.y0, msg.x1, msg.y1, msg.color, msg.size, false);
-      } else if (msg.type === "clearCanvas") {
-        clearBoard(false);
-      } else if (msg.type === "roundState") {
-        document.getElementById("wordMask").textContent = msg.maskedWord;
-        document.getElementById("roundStatus").textContent = `Round ${msg.round} / ${msg.maxRounds}`;
-        if (msg.hangmanLeft !== undefined) {
-          document.getElementById("guessesRemaining").textContent = `${msg.hangmanLeft} / ${msg.hangmanMax}`;
-        }
-      } else if (msg.type === "chat") {
-        appendChat(msg.nickname, msg.text, msg.style);
-      } else if (msg.type === "garticAlbum") {
-        renderGarticAlbum(msg.chain);
-      } else if (msg.type === "snakeTick") {
-        renderSnakeFrame(msg.snakes, msg.orbs);
-      }
-    }
-
-    // ========================================================================
-    // 4. CANVAS DRAWING & PNG DOWNLOAD (For Skribbl, Gartic, & Team Hangman)
-    // ========================================================================
+    // 3. Canvas & Drawing Engine
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     clearBoard(false);
@@ -657,27 +599,25 @@
     });
 
     let lastPos = { x: 0, y: 0 };
-    function getCanvasCoords(e) {
-      const rect = canvas.getBoundingClientRect();
+    function getCoords(e) {
+      const r = canvas.getBoundingClientRect();
       return {
-        x: (e.clientX - rect.left) * (canvas.width / rect.width),
-        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+        x: (e.clientX - r.left) * (canvas.width / r.width),
+        y: (e.clientY - r.top) * (canvas.height / r.height)
       };
     }
 
     canvas.addEventListener("pointerdown", (e) => {
       if (state.mode === "snake") return;
       state.drawing = true;
-      lastPos = getCanvasCoords(e);
+      lastPos = getCoords(e);
     });
-
     canvas.addEventListener("pointermove", (e) => {
       if (!state.drawing || state.mode === "snake") return;
-      const pos = getCanvasCoords(e);
+      const pos = getCoords(e);
       drawLine(lastPos.x, lastPos.y, pos.x, pos.y, state.color, state.size, true);
       lastPos = pos;
     });
-
     window.addEventListener("pointerup", () => { state.drawing = false; });
 
     function drawLine(x0, y0, x1, y1, color, size, emit) {
@@ -688,10 +628,7 @@
       ctx.lineWidth = size;
       ctx.lineCap = "round";
       ctx.stroke();
-
-      if (emit) {
-        sendPacket("stroke", { x0, y0, x1, y1, color, size });
-      }
+      if (emit) sendPacket("stroke", { x0, y0, x1, y1, color, size });
     }
 
     function clearBoard(emit = true) {
@@ -700,39 +637,31 @@
       if (emit) sendPacket("clearCanvas");
     }
 
-    // Download Drawing as PNG
     document.getElementById("btnDownloadImg").onclick = () => {
-      const link = document.createElement("a");
-      link.download = `enclave-arcade-${Date.now()}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
+      const a = document.createElement("a");
+      a.download = `enclave-arcade-${Date.now()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
     };
-
     document.getElementById("btnClear").onclick = () => clearBoard(true);
     document.getElementById("btnEraser").onclick = () => { state.color = "#ffffff"; };
     document.getElementById("brushSize").oninput = (e) => { state.size = Number(e.target.value); };
 
-    // ========================================================================
-    // 5. GAME MODE SWITCHING (Skribbl, Gartic, Team Hangman, Snake.io)
-    // ========================================================================
+    // 4. Game Modes & Settings
     document.querySelectorAll(".mode-btn").forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         state.mode = btn.dataset.mode;
 
-        document.getElementById("hangmanCounter").style.display =
-          state.mode === "hangman" ? "flex" : "none";
-        document.getElementById("drawingToolbar").style.display =
-          state.mode === "snake" ? "none" : "flex";
-        document.getElementById("garticOverlay").style.display =
-          state.mode === "gartic" ? "flex" : "none";
+        document.getElementById("hangmanCounter").style.display = state.mode === "hangman" ? "flex" : "none";
+        document.getElementById("drawingToolbar").style.display = state.mode === "snake" ? "none" : "flex";
+        document.getElementById("garticOverlay").style.display = state.mode === "gartic" ? "flex" : "none";
 
         sendPacket("switchMode", { mode: state.mode });
       };
     });
 
-    // Save / Sync Editable Settings (including Hangman guess limit)
     document.getElementById("btnStartMatch").onclick = () => {
       const settings = {
         mode: state.mode,
@@ -741,42 +670,10 @@
         hangmanMaxGuesses: Number(document.getElementById("cfgHangmanGuesses").value) || 10,
         difficulty: document.getElementById("cfgDifficulty").value
       };
-      document.getElementById("guessesRemaining").textContent =
-        `${settings.hangmanMaxGuesses} / ${settings.hangmanMaxGuesses}`;
       sendPacket("startGame", { settings });
     };
 
-    // Gartic Album Renderer with per-drawing Download Button
-    function renderGarticAlbum(chain) {
-      const overlay = document.getElementById("garticOverlay");
-      const album = document.getElementById("garticAlbum");
-      overlay.style.display = "flex";
-      album.innerHTML = "";
-      chain.forEach((step, idx) => {
-        const card = document.createElement("div");
-        card.className = "gartic-card";
-        card.innerHTML = `<strong>${step.nickname}</strong>: ${step.prompt || "Drew an interpretation"}`;
-        if (step.imageDataUrl) {
-          const img = document.createElement("img");
-          img.src = step.imageDataUrl;
-          const dlBtn = document.createElement("button");
-          dlBtn.className = "btn-secondary";
-          dlBtn.style.marginTop = "8px";
-          dlBtn.textContent = "Download Image";
-          dlBtn.onclick = () => {
-            const a = document.createElement("a");
-            a.download = `gartic-${step.nickname}-${idx + 1}.png`;
-            a.href = step.imageDataUrl;
-            a.click();
-          };
-          card.appendChild(img);
-          card.appendChild(dlBtn);
-        }
-        album.appendChild(card);
-      });
-    }
-
-    // Snake.io Live Keyboard Input & Renderer
+    // 5. Snake.io Keyboard Input & Frame Renderer
     window.addEventListener("keydown", (e) => {
       if (state.mode !== "snake") return;
       const dirs = {
@@ -785,22 +682,18 @@
         ArrowLeft: [-1, 0], KeyA: [-1, 0],
         ArrowRight: [1, 0], KeyD: [1, 0]
       };
-      if (dirs[e.code]) {
-        sendPacket("snakeDir", { dx: dirs[e.code][0], dy: dirs[e.code][1] });
-      }
+      if (dirs[e.code]) sendPacket("snakeDir", { dx: dirs[e.code][0], dy: dirs[e.code][1] });
     });
 
     function renderSnakeFrame(snakes, orbs) {
       ctx.fillStyle = "#18191c";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       orbs.forEach(o => {
         ctx.fillStyle = "#f0b232";
         ctx.beginPath();
         ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
         ctx.fill();
       });
-
       snakes.forEach(s => {
         ctx.fillStyle = s.color || "#5865f2";
         s.body.forEach((seg, i) => {
@@ -809,32 +702,29 @@
             ctx.fillStyle = "#ffffff";
             ctx.font = "600 11px sans-serif";
             ctx.fillText(s.nickname, seg.x - 16, seg.y - 12);
-            ctx.fillStyle = s.color || "#5865f2";
           }
         });
       });
     }
 
-    // ========================================================================
-    // 6. ROSTER & CHAT / GUESS SUBMISSION
-    // ========================================================================
+    // 6. Roster & Chat
     function renderRoster() {
-      const container = document.getElementById("playerList");
-      container.innerHTML = "";
+      const c = document.getElementById("playerList");
+      c.innerHTML = "";
       state.players.forEach(p => {
         const row = document.createElement("div");
         row.className = "player-row";
         row.innerHTML = `
           <div class="player-row-left">
             <img src="${p.avatarUrl}" alt="" />
-            <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.nickname}</span>
+            <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.nickname}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             ${state.mode === "hangman" ? `<span class="team-tag ${p.team === "A" ? "team-a" : "team-b"}">Team ${p.team}</span>` : ""}
             <span style="color:var(--text-muted);font-weight:600;">${p.score || 0}</span>
           </div>
         `;
-        container.appendChild(row);
+        c.appendChild(row);
       });
     }
 
@@ -854,7 +744,7 @@
       }
     });
 
-    initDiscordIdentity();
+    initApp();
   </script>
 </body>
 </html>
