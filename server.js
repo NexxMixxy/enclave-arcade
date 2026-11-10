@@ -151,6 +151,7 @@ function sendWsFrame(socket, obj) {
   socket.write(Buffer.concat([header, payload]));
 }
 
+
 function decodeWsFrames(buffer) {
   const messages = [];
   let offset = 0;
@@ -196,6 +197,46 @@ function decodeWsFrames(buffer) {
   return { close: false, messages, remaining: buffer.subarray(offset) };
 }
 
+// Add this function to your Render server.js to register slash commands automatically on startup
+async function registerDiscordSlashCommands() {
+  const appId = process.env.DISCORD_CLIENT_ID;
+  const botToken = process.env.DISCORD_BOT_TOKEN; // Add your bot token to Render environment variables
+  
+  if (!botToken) return;
+
+  const url = `https://discord.com/api/v10/applications/${appId}/commands`;
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify([
+      {
+        name: 'arcade',
+        description: 'Launch Enclave Arcade (Skribbl, Gartic, Hangman & Snake)',
+        options: [
+          {
+            name: 'mode',
+            description: 'Choose initial game mode',
+            type: 3, // STRING type
+            required: false,
+            choices: [
+              { name: 'Skribbl Classic', value: 'skribbl' },
+              { name: 'Gartic Chain', value: 'gartic' },
+              { name: 'Team Hangman', value: 'hangman' },
+              { name: 'Live Snake.io', value: 'snake' }
+            ]
+          }
+        ]
+      }
+    ])
+  });
+  
+  if (response.ok) {
+    console.log('[Discord Bot] Successfully registered /arcade slash command!');
+  }
+}
 // ============================================================================
 // 3. GAME ROOMS & LOGIC
 // ============================================================================
